@@ -169,7 +169,7 @@ function sessionEmbed(session) {
       { name: 'Duration', value: durationLabel(session.durationMs), inline: true },
       { name: 'Clock In', value: `<t:${Math.floor(new Date(session.clockIn).getTime() / 1000)}:F>` },
       { name: 'Clock Out', value: `<t:${Math.floor(new Date(session.clockOut).getTime() / 1000)}:F>` },
-      { name: 'Ended By', value: session.reason === 'disconnect' ? 'Player disconnected' : session.reason === 'service_restart' ? 'Service restart recovery' : '/clockout' }
+      { name: 'Ended By', value: session.reason === 'disconnect' ? 'Player disconnected' : session.reason === 'patrol_ended' ? 'Patrol ended' : session.reason === 'service_restart' ? 'Service restart recovery' : '/clockout' }
     )
     .setFooter({ text: `Session ${session.id}` });
 
@@ -363,7 +363,7 @@ app.post('/api/clockout', async (request, response) => {
 
     session.clockOut = new Date().toISOString();
     session.durationMs = Math.max(0, new Date(session.clockOut) - new Date(session.clockIn));
-    session.reason = ['command', 'disconnect'].includes(request.body.reason) ? request.body.reason : 'command';
+    session.reason = ['command', 'disconnect', 'patrol_ended'].includes(request.body.reason) ? request.body.reason : 'command';
     session.status = 'pending';
     saveState();
     try {

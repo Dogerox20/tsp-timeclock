@@ -2,6 +2,11 @@ Config = {}
 
 Config.ClockInCommand = 'clockin'
 Config.ClockOutCommand = 'clockout'
+Config.PatrolStartCommand = 'patrolstart'
+Config.PatrolStopCommand = 'patrolstop'
+Config.PatrolStatusCommand = 'patrolstatus'
+Config.PatrolAcePermission = 'tsp.timeclock.patrol'
+Config.JoinReminderDelayMs = 10000
 
 -- These should be set in server.cfg. Values here are only development fallbacks.
 Config.ApiUrl = GetConvar('tsp_timeclock_api_url', 'http://127.0.0.1:3099')

@@ -1,5 +1,7 @@
 local resourceName = GetCurrentResourceName()
 local activeBySource = {}
+local patrolActive = false
+local clockOut
 
 local function notify(source, message, color)
     if source == 0 then
@@ -59,6 +61,11 @@ RegisterCommand(Config.ClockInCommand, function(source)
         return
     end
 
+    if not patrolActive then
+        notify(source, 'You cannot clock in because there is no active patrol.', { 220, 53, 69 })
+        return
+    end
+
     local discordId = discordIdFor(source)
     if not discordId then
         notify(source, 'Discord is not linked. Restart Discord and FiveM, then reconnect.', { 220, 53, 69 })
@@ -76,11 +83,15 @@ RegisterCommand(Config.ClockInCommand, function(source)
         end
 
         activeBySource[source] = result.sessionId
+        if not patrolActive then
+            clockOut(source, 'patrol_ended', true)
+            return
+        end
         notify(source, ('Clocked in as %s.'):format(result.rosterName or GetPlayerName(source)), { 25, 135, 84 })
     end)
 end, false)
 
-local function clockOut(source, reason, shouldNotify)
+clockOut = function(source, reason, shouldNotify)
     local discordId = discordIdFor(source)
     local sessionId = activeBySource[source]
 
@@ -108,6 +119,44 @@ local function clockOut(source, reason, shouldNotify)
     end)
 end
 
+
+local function canManagePatrol(source)
+    return source == 0 or IsPlayerAceAllowed(source, Config.PatrolAcePermission)
+end
+
+RegisterCommand(Config.PatrolStartCommand, function(source)
+    if not canManagePatrol(source) then
+        notify(source, 'You do not have permission to manage patrol status.', { 220, 53, 69 })
+        return
+    end
+    if patrolActive then
+        notify(source, 'Patrol is already active.', { 255, 193, 7 })
+        return
+    end
+    patrolActive = true
+    notify(source, 'Patrol started. Members may now use /clockin.', { 25, 135, 84 })
+end, false)
+
+RegisterCommand(Config.PatrolStopCommand, function(source)
+    if not canManagePatrol(source) then
+        notify(source, 'You do not have permission to manage patrol status.', { 220, 53, 69 })
+        return
+    end
+    if not patrolActive then
+        notify(source, 'There is no active patrol.', { 255, 193, 7 })
+        return
+    end
+    patrolActive = false
+    notify(source, 'Patrol stopped. Active members are being clocked out.', { 25, 135, 84 })
+    for playerSource in pairs(activeBySource) do
+        clockOut(playerSource, 'patrol_ended', true)
+    end
+end, false)
+
+RegisterCommand(Config.PatrolStatusCommand, function(source)
+    notify(source, patrolActive and 'Patrol is currently active.' or 'There is no active patrol.', patrolActive and { 25, 135, 84 } or { 255, 193, 7 })
+end, false)
+
 RegisterCommand(Config.ClockOutCommand, function(source)
     if source == 0 then
         notify(source, 'This command must be used by a player.')
@@ -119,6 +168,15 @@ end, false)
 AddEventHandler('playerDropped', function()
     clockOut(source, 'disconnect', false)
     activeBySource[source] = nil
+end)
+
+AddEventHandler('playerJoining', function()
+    local playerSource = source
+    SetTimeout(Config.JoinReminderDelayMs, function()
+        if patrolActive and GetPlayerName(playerSource) then
+            notify(playerSource, 'A patrol is active. Remember to use /clockin before beginning patrol.', { 255, 193, 7 })
+        end
+    end)
 end)
 AddEventHandler('onResourceStart', function(startedResource)
     if startedResource ~= resourceName then return end

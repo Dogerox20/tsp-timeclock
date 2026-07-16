@@ -51,6 +51,7 @@ Add this before `ensure tsp-timeclock` in `server.cfg`, using the same secret as
 ```cfg
 set tsp_timeclock_api_url "http://127.0.0.1:3099"
 set tsp_timeclock_api_secret "replace-with-the-same-long-random-secret"
+add_ace group.admin tsp.timeclock.patrol allow
 ensure tsp-timeclock
 ```
 
@@ -97,6 +98,7 @@ After Railway provides a domain, point FiveM at it:
 ```cfg
 set tsp_timeclock_api_url "https://your-service.up.railway.app"
 set tsp_timeclock_api_secret "the-same-value-as-railway-api-secret"
+add_ace group.admin tsp.timeclock.patrol allow
 ensure tsp-timeclock
 ```
 
@@ -105,6 +107,9 @@ The Railway health check uses `/health`. A healthy response reports both API ava
 ## Behavior and safeguards
 
 - Discord ID must exist on the roster before clock-in.
+- Authorized staff start patrol with `/patrolstart` and end it with `/patrolstop`; anyone can check `/patrolstatus`.
+- `/clockin` is denied unless patrol is active. Joining players receive a private chat reminder only during active patrol.
+- Ending patrol automatically clocks out all active members and submits their sessions for approval.
 - A member cannot have two active sessions.
 - `/clockout` and disconnect both close the active session.
 - Approvals are serialized and session IDs prevent a second button click from adding time twice.
