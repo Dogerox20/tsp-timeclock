@@ -42,7 +42,7 @@ Fill every required value in `.env`. `GOOGLE_SPREADSHEET_ID` is the long ID betw
 
 Use a long random value for `API_SECRET`. Keep `.env`, the Google key, and the Discord token private. The service listens only on `127.0.0.1` by default and stores durable session state in `service/data/sessions.json`.
 
-Hours are always stored as numeric Google Sheets durations and displayed as `00:00:00`. This preserves one-second sessions without decimal-hour rounding.
+Hours are always stored as numeric Google Sheets durations and displayed with the elapsed-time pattern `[hh]:mm:ss`. This preserves one-second sessions without decimal-hour rounding.
 
 ## 4. Configure FiveM
 

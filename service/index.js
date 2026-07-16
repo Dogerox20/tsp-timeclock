@@ -14,6 +14,7 @@ const {
   Client,
   EmbedBuilder,
   GatewayIntentBits,
+  MessageFlags,
   PermissionFlagsBits
 } = require('discord.js');
 
@@ -237,21 +238,18 @@ async function applyApproval(session, adminId) {
   const totalHours = existingHours + sessionHours;
   const sheetValue = totalHours / 24;
 
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: config.spreadsheetId,
-    range: cell,
-    valueInputOption: 'RAW',
-    requestBody: { values: [[sheetValue]] }
-  });
-
   const metadata = await sheets.spreadsheets.get({ spreadsheetId: config.spreadsheetId, fields: 'sheets(properties(sheetId,title))' });
   const roster = metadata.data.sheets.find((entry) => entry.properties.title === config.rosterSheet);
+  if (!roster) throw new Error(`Roster sheet ${config.rosterSheet} was not found.`);
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: config.spreadsheetId,
-    requestBody: { requests: [{ repeatCell: {
+    requestBody: { requests: [{ updateCells: {
       range: { sheetId: roster.properties.sheetId, startRowIndex: member.row - 1, endRowIndex: member.row, startColumnIndex: columnNumber(config.hoursColumn) - 1, endColumnIndex: columnNumber(config.hoursColumn) },
-      cell: { userEnteredFormat: { numberFormat: { type: 'DURATION', pattern: '[h]:mm:ss' } } },
-      fields: 'userEnteredFormat.numberFormat'
+      rows: [{ values: [{
+        userEnteredValue: { numberValue: sheetValue },
+        userEnteredFormat: { numberFormat: { type: 'TIME', pattern: '[hh]:mm:ss' } }
+      }] }],
+      fields: 'userEnteredValue,userEnteredFormat.numberFormat'
     } }] }
   });
 
@@ -293,22 +291,22 @@ async function appendAudit(session, rosterName, status, adminId) {
 discord.on('interactionCreate', async (interaction) => {
   if (!interaction.isButton() || !interaction.customId.startsWith('timeclock:')) return;
   if (!canReview(interaction)) {
-    await interaction.reply({ content: 'You do not have permission to review time entries.', ephemeral: true });
+    await interaction.reply({ content: 'You do not have permission to review time entries.', flags: MessageFlags.Ephemeral });
     return;
   }
 
   const [, action, sessionId] = interaction.customId.split(':');
   const session = state.sessions.find((entry) => entry.id === sessionId);
   if (!session) {
-    await interaction.reply({ content: 'That session no longer exists.', ephemeral: true });
+    await interaction.reply({ content: 'That session no longer exists.', flags: MessageFlags.Ephemeral });
     return;
   }
   if (session.status !== 'pending') {
-    await interaction.reply({ content: `This entry was already ${session.status}.`, ephemeral: true });
+    await interaction.reply({ content: `This entry was already ${session.status}.`, flags: MessageFlags.Ephemeral });
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   try {
     approvalQueue = approvalQueue.catch(() => {}).then(() => action === 'approve' ? applyApproval(session, interaction.user.id) : applyDenial(session, interaction.user.id));
     await approvalQueue;
