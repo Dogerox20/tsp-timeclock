@@ -25,8 +25,9 @@ const required = [
   'GOOGLE_SPREADSHEET_ID'
 ];
 const missing = required.filter((name) => !process.env[name]);
-if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON && !process.env.GOOGLE_SERVICE_ACCOUNT_FILE) {
-  missing.push('GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE');
+const hasSplitGoogleCredentials = process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY;
+if (!hasSplitGoogleCredentials && !process.env.GOOGLE_SERVICE_ACCOUNT_JSON && !process.env.GOOGLE_SERVICE_ACCOUNT_FILE) {
+  missing.push('split Google credentials, GOOGLE_SERVICE_ACCOUNT_JSON, or GOOGLE_SERVICE_ACCOUNT_FILE');
 }
 if (missing.length) {
   console.error(`Missing required environment variables: ${missing.join(', ')}`);
@@ -42,6 +43,9 @@ const config = {
   spreadsheetId: process.env.GOOGLE_SPREADSHEET_ID,
   credentialsFile: process.env.GOOGLE_SERVICE_ACCOUNT_FILE,
   credentialsJson: process.env.GOOGLE_SERVICE_ACCOUNT_JSON,
+  googleClientEmail: process.env.GOOGLE_CLIENT_EMAIL,
+  googlePrivateKey: process.env.GOOGLE_PRIVATE_KEY,
+  googleProjectId: process.env.GOOGLE_PROJECT_ID,
   rosterSheet: process.env.ROSTER_SHEET_NAME || 'Membership Tracker',
   rosterStartRow: Number(process.env.ROSTER_START_ROW || 9),
   nameColumn: (process.env.ROSTER_NAME_COLUMN || 'D').toUpperCase(),
@@ -74,7 +78,14 @@ function saveState() {
 }
 
 let inlineCredentials;
-if (config.credentialsJson) {
+if (config.googleClientEmail && config.googlePrivateKey) {
+  inlineCredentials = {
+    type: 'service_account',
+    project_id: config.googleProjectId,
+    client_email: config.googleClientEmail.trim(),
+    private_key: config.googlePrivateKey.replace(/\\n/g, '\n').trim()
+  };
+} else if (config.credentialsJson) {
   try {
     inlineCredentials = JSON.parse(config.credentialsJson);
   } catch (error) {

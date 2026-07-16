@@ -72,7 +72,9 @@ The repository includes a production Dockerfile and `railway.json`. The deployed
    - `DISCORD_APPROVAL_CHANNEL_ID`
    - `DISCORD_APPROVER_ROLE_IDS`
    - `GOOGLE_SPREADSHEET_ID`
-   - `GOOGLE_SERVICE_ACCOUNT_JSON`
+   - `GOOGLE_PROJECT_ID`
+   - `GOOGLE_CLIENT_EMAIL`
+   - `GOOGLE_PRIVATE_KEY`
    - `ROSTER_SHEET_NAME=Membership Tracker`
    - `ROSTER_START_ROW=9`
    - `ROSTER_NAME_COLUMN=D`
@@ -82,7 +84,13 @@ The repository includes a production Dockerfile and `railway.json`. The deployed
    - `HOURS_VALUE_MODE=decimal`
    - `DATA_FILE=/data/sessions.json` (optional; Railway also detects the attached volume automatically)
 
-Do not manually set `PORT`; Railway supplies it. Paste the entire downloaded Google service-account JSON into `GOOGLE_SERVICE_ACCOUNT_JSON`. Railway stores it as a secret variable.
+Do not manually set `PORT`; Railway supplies it. For the three Google variables, open the downloaded service-account JSON and copy only the matching values:
+
+- `project_id` goes in `GOOGLE_PROJECT_ID`.
+- `client_email` goes in `GOOGLE_CLIENT_EMAIL`.
+- The complete value from `private_key`, including the `BEGIN PRIVATE KEY` and `END PRIVATE KEY` lines, goes in `GOOGLE_PRIVATE_KEY`.
+
+Railway accepts the private key with real line breaks or with literal `\\n` characters. Do not include the JSON field name or the quotation marks. Remove the old `GOOGLE_SERVICE_ACCOUNT_JSON` and `GOOGLE_SERVICE_ACCOUNT_FILE` variables from Railway after adding these three split variables.
 
 After Railway provides a domain, point FiveM at it:
 
