@@ -42,7 +42,7 @@ Fill every required value in `.env`. `GOOGLE_SPREADSHEET_ID` is the long ID betw
 
 Use a long random value for `API_SECRET`. Keep `.env`, the Google key, and the Discord token private. The service listens only on `127.0.0.1` by default and stores durable session state in `service/data/sessions.json`.
 
-`HOURS_VALUE_MODE=duration` displays totals as `00:00:00` in Sheets while retaining a numeric duration value. Set it to `decimal` only if you prefer totals such as `2.25`.
+Hours are always stored as numeric Google Sheets durations and displayed as `00:00:00`. This preserves one-second sessions without decimal-hour rounding.
 
 ## 4. Configure FiveM
 
@@ -80,7 +80,6 @@ The repository includes a production Dockerfile and `railway.json`. The deployed
    - `ROSTER_DISCORD_COLUMN=E`
    - `ROSTER_HOURS_COLUMN=G`
    - `ENABLE_HOURS_AUDIT_LOG=false`
-   - `HOURS_VALUE_MODE=duration`
    - `DATA_FILE=/data/sessions.json` (optional; Railway also detects the attached volume automatically)
 
 Do not manually set `PORT`; Railway supplies it. For the three Google variables, open the downloaded service-account JSON and copy only the matching values:

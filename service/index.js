@@ -52,8 +52,7 @@ const config = {
   discordColumn: (process.env.ROSTER_DISCORD_COLUMN || 'E').toUpperCase(),
   hoursColumn: (process.env.ROSTER_HOURS_COLUMN || 'G').toUpperCase(),
   logSheet: process.env.HOURS_LOG_SHEET_NAME || 'Hours',
-  auditLogEnabled: String(process.env.ENABLE_HOURS_AUDIT_LOG || 'false').toLowerCase() === 'true',
-  valueMode: process.env.HOURS_VALUE_MODE === 'duration' ? 'duration' : 'decimal'
+  auditLogEnabled: String(process.env.ENABLE_HOURS_AUDIT_LOG || 'false').toLowerCase() === 'true'
 };
 
 const dataFile = process.env.DATA_FILE
@@ -216,7 +215,7 @@ function canReview(interaction) {
 }
 
 function parseHours(value) {
-  if (typeof value === 'number') return config.valueMode === 'duration' ? value * 24 : value;
+  if (typeof value === 'number') return value * 24;
   const text = String(value || '').trim();
   if (!text) return 0;
   if (/^\d+(\.\d+)?$/.test(text)) return Number(text);
@@ -236,7 +235,7 @@ async function applyApproval(session, adminId) {
   const existingHours = parseHours(current.data.values?.[0]?.[0]);
   const sessionHours = session.durationMs / 3600000;
   const totalHours = existingHours + sessionHours;
-  const sheetValue = config.valueMode === 'duration' ? totalHours / 24 : Math.round(totalHours * 100) / 100;
+  const sheetValue = totalHours / 24;
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: config.spreadsheetId,
@@ -245,18 +244,16 @@ async function applyApproval(session, adminId) {
     requestBody: { values: [[sheetValue]] }
   });
 
-  if (config.valueMode === 'duration') {
-    const metadata = await sheets.spreadsheets.get({ spreadsheetId: config.spreadsheetId, fields: 'sheets(properties(sheetId,title))' });
-    const roster = metadata.data.sheets.find((entry) => entry.properties.title === config.rosterSheet);
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: config.spreadsheetId,
-      requestBody: { requests: [{ repeatCell: {
-        range: { sheetId: roster.properties.sheetId, startRowIndex: member.row - 1, endRowIndex: member.row, startColumnIndex: columnNumber(config.hoursColumn) - 1, endColumnIndex: columnNumber(config.hoursColumn) },
-        cell: { userEnteredFormat: { numberFormat: { type: 'DURATION', pattern: '[h]:mm:ss' } } },
-        fields: 'userEnteredFormat.numberFormat'
-      } }] }
-    });
-  }
+  const metadata = await sheets.spreadsheets.get({ spreadsheetId: config.spreadsheetId, fields: 'sheets(properties(sheetId,title))' });
+  const roster = metadata.data.sheets.find((entry) => entry.properties.title === config.rosterSheet);
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: config.spreadsheetId,
+    requestBody: { requests: [{ repeatCell: {
+      range: { sheetId: roster.properties.sheetId, startRowIndex: member.row - 1, endRowIndex: member.row, startColumnIndex: columnNumber(config.hoursColumn) - 1, endColumnIndex: columnNumber(config.hoursColumn) },
+      cell: { userEnteredFormat: { numberFormat: { type: 'DURATION', pattern: '[h]:mm:ss' } } },
+      fields: 'userEnteredFormat.numberFormat'
+    } }] }
+  });
 
   session.status = 'approved';
   session.reviewedBy = adminId;
