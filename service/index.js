@@ -22,10 +22,12 @@ const required = [
   'DISCORD_BOT_TOKEN',
   'DISCORD_GUILD_ID',
   'DISCORD_APPROVAL_CHANNEL_ID',
-  'GOOGLE_SPREADSHEET_ID',
-  'GOOGLE_SERVICE_ACCOUNT_FILE'
+  'GOOGLE_SPREADSHEET_ID'
 ];
 const missing = required.filter((name) => !process.env[name]);
+if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON && !process.env.GOOGLE_SERVICE_ACCOUNT_FILE) {
+  missing.push('GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE');
+}
 if (missing.length) {
   console.error(`Missing required environment variables: ${missing.join(', ')}`);
   process.exit(1);
@@ -39,6 +41,7 @@ const config = {
   approverRoleIds: new Set((process.env.DISCORD_APPROVER_ROLE_IDS || '').split(',').map((id) => id.trim()).filter(Boolean)),
   spreadsheetId: process.env.GOOGLE_SPREADSHEET_ID,
   credentialsFile: process.env.GOOGLE_SERVICE_ACCOUNT_FILE,
+  credentialsJson: process.env.GOOGLE_SERVICE_ACCOUNT_JSON,
   rosterSheet: process.env.ROSTER_SHEET_NAME || 'Membership Tracker',
   rosterStartRow: Number(process.env.ROSTER_START_ROW || 9),
   nameColumn: (process.env.ROSTER_NAME_COLUMN || 'D').toUpperCase(),
@@ -48,7 +51,9 @@ const config = {
   valueMode: process.env.HOURS_VALUE_MODE === 'duration' ? 'duration' : 'decimal'
 };
 
-const dataFile = path.join(__dirname, 'data', 'sessions.json');
+const dataFile = process.env.DATA_FILE
+  || (process.env.RAILWAY_VOLUME_MOUNT_PATH && path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'sessions.json'))
+  || path.join(__dirname, 'data', 'sessions.json');
 fs.mkdirSync(path.dirname(dataFile), { recursive: true });
 
 function loadState() {
@@ -68,8 +73,18 @@ function saveState() {
   fs.renameSync(temporary, dataFile);
 }
 
+let inlineCredentials;
+if (config.credentialsJson) {
+  try {
+    inlineCredentials = JSON.parse(config.credentialsJson);
+  } catch (error) {
+    console.error('GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON:', error.message);
+    process.exit(1);
+  }
+}
+
 const auth = new google.auth.GoogleAuth({
-  keyFile: config.credentialsFile,
+  ...(inlineCredentials ? { credentials: inlineCredentials } : { keyFile: config.credentialsFile }),
   scopes: ['https://www.googleapis.com/auth/spreadsheets']
 });
 const sheets = google.sheets({ version: 'v4', auth });
@@ -335,5 +350,5 @@ discord.once('ready', async () => {
   }
 });
 
-app.listen(config.port, '127.0.0.1', () => console.log(`Time-clock API listening on 127.0.0.1:${config.port}`));
+app.listen(config.port, '0.0.0.0', () => console.log(`Time-clock API listening on 0.0.0.0:${config.port}`));
 discord.login(process.env.DISCORD_BOT_TOKEN);

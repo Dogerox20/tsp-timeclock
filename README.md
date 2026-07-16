@@ -57,6 +57,43 @@ ensure tsp-timeclock
 
 If the Node service runs on another machine, expose it through a private network or HTTPS reverse proxy and change the URL. Do not expose an unencrypted public HTTP endpoint.
 
+## Railway deployment
+
+The repository includes a production Dockerfile and `railway.json`. The deployed service runs both the Discord bot and the API used by FiveM.
+
+1. In Railway, select **New Project**, **Deploy from GitHub repo**, then choose `Dogerox20/tsp-timeclock`.
+2. Add a public domain to the service under **Settings > Networking**.
+3. Add a Railway volume mounted at `/data`. This preserves active and pending sessions across redeployments.
+4. Add these Railway variables:
+
+   - `API_SECRET`
+   - `DISCORD_BOT_TOKEN`
+   - `DISCORD_GUILD_ID`
+   - `DISCORD_APPROVAL_CHANNEL_ID`
+   - `DISCORD_APPROVER_ROLE_IDS`
+   - `GOOGLE_SPREADSHEET_ID`
+   - `GOOGLE_SERVICE_ACCOUNT_JSON`
+   - `ROSTER_SHEET_NAME=Membership Tracker`
+   - `ROSTER_START_ROW=9`
+   - `ROSTER_NAME_COLUMN=D`
+   - `ROSTER_DISCORD_COLUMN=E`
+   - `ROSTER_HOURS_COLUMN=G`
+   - `HOURS_LOG_SHEET_NAME=Hours`
+   - `HOURS_VALUE_MODE=decimal`
+   - `DATA_FILE=/data/sessions.json` (optional; Railway also detects the attached volume automatically)
+
+Do not manually set `PORT`; Railway supplies it. Paste the entire downloaded Google service-account JSON into `GOOGLE_SERVICE_ACCOUNT_JSON`. Railway stores it as a secret variable.
+
+After Railway provides a domain, point FiveM at it:
+
+```cfg
+set tsp_timeclock_api_url "https://your-service.up.railway.app"
+set tsp_timeclock_api_secret "the-same-value-as-railway-api-secret"
+ensure tsp-timeclock
+```
+
+The Railway health check uses `/health`. A healthy response reports both API availability and whether Discord is connected.
+
 ## Behavior and safeguards
 
 - Discord ID must exist on the roster before clock-in.
