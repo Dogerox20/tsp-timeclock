@@ -1,6 +1,6 @@
 # TSP Time Clock
 
-This resource records `/clockin` and `/clockout` sessions by Discord ID. Clocking out—or leaving the server—posts an approval request in Discord. An approved request adds the duration to the matching roster row and appends an audit entry to the `Hours` sheet.
+This resource records `/clockin` and `/clockout` sessions by Discord ID. Clocking out—or leaving the server—posts an approval request in Discord. An approved request adds the duration to the matching roster row, with an optional separate audit log.
 
 ## Requirements
 
@@ -8,14 +8,13 @@ This resource records `/clockin` and `/clockout` sessions by Discord ID. Clockin
 - Node.js 20 or newer on the machine running the service
 - A Discord bot in the Shoreline Discord server
 - A Google Cloud service account with edit access to the membership spreadsheet
-- A sheet tab named `Hours`
 
 ## 1. Prepare Google Sheets
 
 1. In Google Cloud, create a project and enable the Google Sheets API.
 2. Create a service account and download its JSON key to a private location outside the FiveM resources folder.
 3. Share the membership spreadsheet with the service account email as **Editor**.
-4. Create an `Hours` tab. Row 1 may use these headings:
+4. Optional: create a separate `Hours` audit tab if you want session history. Row 1 may use these headings:
 
    `Session ID | Discord ID | Member | Clock In | Clock Out | Hours | Status | Reviewed By`
 
@@ -80,7 +79,7 @@ The repository includes a production Dockerfile and `railway.json`. The deployed
    - `ROSTER_NAME_COLUMN=D`
    - `ROSTER_DISCORD_COLUMN=E`
    - `ROSTER_HOURS_COLUMN=G`
-   - `HOURS_LOG_SHEET_NAME=Hours`
+   - `ENABLE_HOURS_AUDIT_LOG=false`
    - `HOURS_VALUE_MODE=decimal`
    - `DATA_FILE=/data/sessions.json` (optional; Railway also detects the attached volume automatically)
 
@@ -91,6 +90,8 @@ Do not manually set `PORT`; Railway supplies it. For the three Google variables,
 - The complete value from `private_key`, including the `BEGIN PRIVATE KEY` and `END PRIVATE KEY` lines, goes in `GOOGLE_PRIVATE_KEY`.
 
 Railway accepts the private key with real line breaks or with literal `\\n` characters. Do not include the JSON field name or the quotation marks. Remove the old `GOOGLE_SERVICE_ACCOUNT_JSON` and `GOOGLE_SERVICE_ACCOUNT_FILE` variables from Railway after adding these three split variables.
+
+For the current Shoreline layout, leave `ENABLE_HOURS_AUDIT_LOG=false`. Approved time is added directly to column G on the roster sheet. If you later create a separate audit tab, set the variable to `true` and add `HOURS_LOG_SHEET_NAME=Hours`.
 
 After Railway provides a domain, point FiveM at it:
 
@@ -110,13 +111,13 @@ The Railway health check uses `/health`. A healthy response reports both API ava
 - Approvals are serialized and session IDs prevent a second button click from adding time twice.
 - The roster is checked again at approval time.
 - Pending sessions and unposted Discord messages survive service restarts.
-- Approved and denied entries are appended to the `Hours` audit tab.
+- Approved and denied entries are appended to an audit tab only when `ENABLE_HOURS_AUDIT_LOG=true`.
 
 ## Test checklist
 
 1. Start the Node service, then the FiveM resource.
 2. Run `/clockin` with a rostered Discord account.
 3. Run `/clockout` and confirm the Discord message appears.
-4. Approve it and confirm both the roster Hours cell and `Hours` audit tab update.
+4. Approve it and confirm the roster Hours cell updates. If audit logging is enabled, confirm its tab also updates.
 5. Repeat once by disconnecting instead of running `/clockout`.
 6. Confirm a non-approver cannot use the Discord buttons.

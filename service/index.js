@@ -52,6 +52,7 @@ const config = {
   discordColumn: (process.env.ROSTER_DISCORD_COLUMN || 'E').toUpperCase(),
   hoursColumn: (process.env.ROSTER_HOURS_COLUMN || 'G').toUpperCase(),
   logSheet: process.env.HOURS_LOG_SHEET_NAME || 'Hours',
+  auditLogEnabled: String(process.env.ENABLE_HOURS_AUDIT_LOG || 'false').toLowerCase() === 'true',
   valueMode: process.env.HOURS_VALUE_MODE === 'duration' ? 'duration' : 'decimal'
 };
 
@@ -238,10 +239,12 @@ async function applyApproval(session, adminId) {
   session.approvedHours = sessionHours;
   saveState();
 
-  try {
-    await appendAudit(session, member.name, 'Approved', adminId);
-  } catch (error) {
-    console.error(`Hours were applied, but audit logging failed for ${session.id}:`, error);
+  if (config.auditLogEnabled) {
+    try {
+      await appendAudit(session, member.name, 'Approved', adminId);
+    } catch (error) {
+      console.error(`Hours were applied, but audit logging failed for ${session.id}:`, error);
+    }
   }
 }
 
@@ -250,7 +253,7 @@ async function applyDenial(session, adminId) {
   session.reviewedBy = adminId;
   session.reviewedAt = new Date().toISOString();
   saveState();
-  await appendAudit(session, session.rosterName, 'Denied', adminId);
+  if (config.auditLogEnabled) await appendAudit(session, session.rosterName, 'Denied', adminId);
 }
 
 async function appendAudit(session, rosterName, status, adminId) {
@@ -353,7 +356,7 @@ app.post('/api/clockout', async (request, response) => {
   }
 });
 
-discord.once('ready', async () => {
+discord.once('clientReady', async () => {
   console.log(`Discord bot ready as ${discord.user.tag}`);
   const unposted = state.sessions.filter((session) => session.status === 'pending' && !session.discordMessageId);
   for (const session of unposted) {
