@@ -220,8 +220,10 @@ function parseHours(value) {
   const text = String(value || '').trim();
   if (!text) return 0;
   if (/^\d+(\.\d+)?$/.test(text)) return Number(text);
-  const match = text.match(/^(\d+):([0-5]\d)$/);
-  return match ? Number(match[1]) + Number(match[2]) / 60 : 0;
+  const match = text.match(/^(\d+):([0-5]\d)(?::([0-5]\d))?$/);
+  return match
+    ? Number(match[1]) + Number(match[2]) / 60 + Number(match[3] || 0) / 3600
+    : 0;
 }
 
 let approvalQueue = Promise.resolve();

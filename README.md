@@ -114,6 +114,7 @@ The Railway health check uses `/health`. A healthy response reports both API ava
 - Approved and denied entries are appended to an audit tab only when `ENABLE_HOURS_AUDIT_LOG=true`.
 - Approval requests and member DMs display durations as `HH:MM:SS`.
 - After review, the bot DMs the member whether the entry was approved or denied. Closed DMs do not prevent the review.
+- Each approval reads the member's existing Hours value and adds the new session to it; existing numeric durations and `HH:MM:SS` values are preserved.
 
 ## Test checklist
 
