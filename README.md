@@ -7,9 +7,11 @@ Discord approval bot and Google Sheets API for The Shoreline Project's FiveM tim
 - Receives authenticated clock-in and clock-out requests from FiveM.
 - Matches members to the roster by Discord ID.
 - Posts Approve and Deny buttons in the configured Discord channel.
+- Requires reviewing staff to submit a written reason before a denial is completed.
 - Adds approved durations to the member's existing Hours cell.
 - Stores hours as numeric Google Sheets durations formatted `[hh]:mm:ss`.
 - DMs members after approval or denial.
+- Shows denial reasons in both the reviewed channel message and the member's DM.
 - Persists active and pending sessions on a Railway volume.
 
 ## Discord bot setup
@@ -76,6 +78,8 @@ To append approval history to a separate tab, create that tab and set:
 ENABLE_HOURS_AUDIT_LOG=true
 HOURS_LOG_SHEET_NAME=Hours
 ```
+
+When audit logging is enabled, column I stores the denial reason. Use `Reason` as the optional ninth header.
 
 ## Local development
 

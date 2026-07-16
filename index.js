@@ -15,7 +15,10 @@ const {
   EmbedBuilder,
   GatewayIntentBits,
   MessageFlags,
-  PermissionFlagsBits
+  ModalBuilder,
+  PermissionFlagsBits,
+  TextInputBuilder,
+  TextInputStyle
 } = require('discord.js');
 
 const required = [
@@ -176,6 +179,9 @@ function sessionEmbed(session) {
   if (session.reviewedBy) {
     embed.addFields({ name: session.status === 'approved' ? 'Approved By' : 'Denied By', value: `<@${session.reviewedBy}>` });
   }
+  if (session.status === 'denied' && session.denialReason) {
+    embed.addFields({ name: 'Denial Reason', value: session.denialReason });
+  }
   return embed;
 }
 
@@ -203,6 +209,9 @@ async function notifyMember(session) {
         { name: 'Clock Out', value: `<t:${Math.floor(new Date(session.clockOut).getTime() / 1000)}:F>` }
       )
       .setFooter({ text: `Session ${session.id}` });
+    if (!approved && session.denialReason) {
+      embed.addFields({ name: 'Reason', value: session.denialReason });
+    }
     await user.send({ embeds: [embed] });
   } catch (error) {
     console.warn(`Could not DM ${session.discordId} about session ${session.id}: ${error.message}`);
@@ -269,10 +278,11 @@ async function applyApproval(session, adminId) {
   }
 }
 
-async function applyDenial(session, adminId) {
+async function applyDenial(session, adminId, reason) {
   session.status = 'denied';
   session.reviewedBy = adminId;
   session.reviewedAt = new Date().toISOString();
+  session.denialReason = String(reason).trim().slice(0, 500);
   saveState();
   await notifyMember(session);
   if (config.auditLogEnabled) await appendAudit(session, session.rosterName, 'Denied', adminId);
@@ -281,21 +291,72 @@ async function applyDenial(session, adminId) {
 async function appendAudit(session, rosterName, status, adminId) {
   await sheets.spreadsheets.values.append({
     spreadsheetId: config.spreadsheetId,
-    range: `${quoteSheet(config.logSheet)}!A:H`,
+    range: `${quoteSheet(config.logSheet)}!A:I`,
     valueInputOption: 'USER_ENTERED',
     insertDataOption: 'INSERT_ROWS',
-    requestBody: { values: [[session.id, session.discordId, rosterName, session.clockIn, session.clockOut, Math.round(session.durationMs / 36000) / 100, status, adminId]] }
+    requestBody: { values: [[session.id, session.discordId, rosterName, session.clockIn, session.clockOut, Math.round(session.durationMs / 36000) / 100, status, adminId, session.denialReason || '']] }
   });
 }
 
+async function updateApprovalMessage(session) {
+  const channel = await discord.channels.fetch(config.approvalChannelId);
+  if (!channel || !channel.isTextBased()) throw new Error('The approval channel is not a text channel.');
+  const message = await channel.messages.fetch(session.discordMessageId);
+  await message.edit({ embeds: [sessionEmbed(session)], components: approvalComponents(session, true) });
+}
+
 discord.on('interactionCreate', async (interaction) => {
-  if (!interaction.isButton() || !interaction.customId.startsWith('timeclock:')) return;
+  if (!interaction.customId?.startsWith('timeclock:')) return;
   if (!canReview(interaction)) {
     await interaction.reply({ content: 'You do not have permission to review time entries.', flags: MessageFlags.Ephemeral });
     return;
   }
 
+  if (interaction.isButton()) {
+    const [, action, sessionId] = interaction.customId.split(':');
+    const session = state.sessions.find((entry) => entry.id === sessionId);
+    if (!session) {
+      await interaction.reply({ content: 'That session no longer exists.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    if (session.status !== 'pending') {
+      await interaction.reply({ content: `This entry was already ${session.status}.`, flags: MessageFlags.Ephemeral });
+      return;
+    }
+
+    if (action === 'deny') {
+      const reasonInput = new TextInputBuilder()
+        .setCustomId('reason')
+        .setLabel('Why is this time entry being denied?')
+        .setStyle(TextInputStyle.Paragraph)
+        .setMinLength(3)
+        .setMaxLength(500)
+        .setPlaceholder('Enter the reason the member should see...')
+        .setRequired(true);
+      const modal = new ModalBuilder()
+        .setCustomId(`timeclock:deny-reason:${session.id}`)
+        .setTitle('Deny Time Entry')
+        .addComponents(new ActionRowBuilder().addComponents(reasonInput));
+      await interaction.showModal(modal);
+      return;
+    }
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+      approvalQueue = approvalQueue.catch(() => {}).then(() => applyApproval(session, interaction.user.id));
+      await approvalQueue;
+      await updateApprovalMessage(session);
+      await interaction.editReply('Time entry approved.');
+    } catch (error) {
+      console.error('Review failed:', error);
+      await interaction.editReply(`Could not review this entry: ${error.message}`);
+    }
+    return;
+  }
+
+  if (!interaction.isModalSubmit()) return;
   const [, action, sessionId] = interaction.customId.split(':');
+  if (action !== 'deny-reason') return;
   const session = state.sessions.find((entry) => entry.id === sessionId);
   if (!session) {
     await interaction.reply({ content: 'That session no longer exists.', flags: MessageFlags.Ephemeral });
@@ -306,12 +367,18 @@ discord.on('interactionCreate', async (interaction) => {
     return;
   }
 
+  const reason = interaction.fields.getTextInputValue('reason').trim();
+  if (reason.length < 3) {
+    await interaction.reply({ content: 'A denial reason of at least three characters is required.', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   try {
-    approvalQueue = approvalQueue.catch(() => {}).then(() => action === 'approve' ? applyApproval(session, interaction.user.id) : applyDenial(session, interaction.user.id));
+    approvalQueue = approvalQueue.catch(() => {}).then(() => applyDenial(session, interaction.user.id, reason));
     await approvalQueue;
-    await interaction.message.edit({ embeds: [sessionEmbed(session)], components: approvalComponents(session, true) });
-    await interaction.editReply(`Time entry ${session.status}.`);
+    await updateApprovalMessage(session);
+    await interaction.editReply('Time entry denied.');
   } catch (error) {
     console.error('Review failed:', error);
     await interaction.editReply(`Could not review this entry: ${error.message}`);
