@@ -42,7 +42,7 @@ Fill every required value in `.env`. `GOOGLE_SPREADSHEET_ID` is the long ID betw
 
 Use a long random value for `API_SECRET`. Keep `.env`, the Google key, and the Discord token private. The service listens only on `127.0.0.1` by default and stores durable session state in `service/data/sessions.json`.
 
-`HOURS_VALUE_MODE=decimal` writes totals such as `2.25`. Set it to `duration` to display totals as `[h]:mm` in Sheets.
+`HOURS_VALUE_MODE=duration` displays totals as `00:00:00` in Sheets while retaining a numeric duration value. Set it to `decimal` only if you prefer totals such as `2.25`.
 
 ## 4. Configure FiveM
 
@@ -80,7 +80,7 @@ The repository includes a production Dockerfile and `railway.json`. The deployed
    - `ROSTER_DISCORD_COLUMN=E`
    - `ROSTER_HOURS_COLUMN=G`
    - `ENABLE_HOURS_AUDIT_LOG=false`
-   - `HOURS_VALUE_MODE=decimal`
+   - `HOURS_VALUE_MODE=duration`
    - `DATA_FILE=/data/sessions.json` (optional; Railway also detects the attached volume automatically)
 
 Do not manually set `PORT`; Railway supplies it. For the three Google variables, open the downloaded service-account JSON and copy only the matching values:
@@ -112,6 +112,8 @@ The Railway health check uses `/health`. A healthy response reports both API ava
 - The roster is checked again at approval time.
 - Pending sessions and unposted Discord messages survive service restarts.
 - Approved and denied entries are appended to an audit tab only when `ENABLE_HOURS_AUDIT_LOG=true`.
+- Approval requests and member DMs display durations as `HH:MM:SS`.
+- After review, the bot DMs the member whether the entry was approved or denied. Closed DMs do not prevent the review.
 
 ## Test checklist
 

@@ -124,10 +124,11 @@ function cleanName(value) {
 }
 
 function durationLabel(milliseconds) {
-  const totalMinutes = Math.max(0, Math.round(milliseconds / 60000));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return [hours, minutes, seconds].map((value) => String(value).padStart(2, '0')).join(':');
 }
 
 async function rosterMember(discordId) {
@@ -186,6 +187,28 @@ async function postApproval(session) {
   saveState();
 }
 
+async function notifyMember(session) {
+  try {
+    const approved = session.status === 'approved';
+    const user = await discord.users.fetch(session.discordId);
+    const embed = new EmbedBuilder()
+      .setTitle(approved ? 'Time Entry Approved' : 'Time Entry Denied')
+      .setColor(approved ? 0x198754 : 0xdc3545)
+      .setDescription(approved
+        ? 'Your time entry was approved and added to your roster hours.'
+        : 'Your time entry was denied and was not added to your roster hours.')
+      .addFields(
+        { name: 'Duration', value: durationLabel(session.durationMs), inline: true },
+        { name: 'Clock In', value: `<t:${Math.floor(new Date(session.clockIn).getTime() / 1000)}:F>` },
+        { name: 'Clock Out', value: `<t:${Math.floor(new Date(session.clockOut).getTime() / 1000)}:F>` }
+      )
+      .setFooter({ text: `Session ${session.id}` });
+    await user.send({ embeds: [embed] });
+  } catch (error) {
+    console.warn(`Could not DM ${session.discordId} about session ${session.id}: ${error.message}`);
+  }
+}
+
 function canReview(interaction) {
   if (interaction.guildId !== config.guildId) return false;
   if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return true;
@@ -227,7 +250,7 @@ async function applyApproval(session, adminId) {
       spreadsheetId: config.spreadsheetId,
       requestBody: { requests: [{ repeatCell: {
         range: { sheetId: roster.properties.sheetId, startRowIndex: member.row - 1, endRowIndex: member.row, startColumnIndex: columnNumber(config.hoursColumn) - 1, endColumnIndex: columnNumber(config.hoursColumn) },
-        cell: { userEnteredFormat: { numberFormat: { type: 'DURATION', pattern: '[h]:mm' } } },
+        cell: { userEnteredFormat: { numberFormat: { type: 'DURATION', pattern: '[h]:mm:ss' } } },
         fields: 'userEnteredFormat.numberFormat'
       } }] }
     });
@@ -238,6 +261,7 @@ async function applyApproval(session, adminId) {
   session.reviewedAt = new Date().toISOString();
   session.approvedHours = sessionHours;
   saveState();
+  await notifyMember(session);
 
   if (config.auditLogEnabled) {
     try {
@@ -253,6 +277,7 @@ async function applyDenial(session, adminId) {
   session.reviewedBy = adminId;
   session.reviewedAt = new Date().toISOString();
   saveState();
+  await notifyMember(session);
   if (config.auditLogEnabled) await appendAudit(session, session.rosterName, 'Denied', adminId);
 }
 
