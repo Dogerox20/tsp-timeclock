@@ -3,10 +3,10 @@ FROM node:22-alpine
 WORKDIR /app
 RUN corepack enable
 
-COPY service/package.json service/pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 
-COPY service/index.js ./index.js
+COPY index.js ./index.js
 
 RUN mkdir -p /data
 ENV NODE_ENV=production
